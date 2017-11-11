@@ -8,7 +8,7 @@ var AWS = require("aws-sdk");
 AWS.config.update({region: "us-east-1"});
 var baseURL = process.env.BASE_URL;
 var personURL = process.env.PERSON_URL;
-const querySet = {"postal_code":true,"country":true,"city":true, "startKey_id":true, "limit":true};
+const querySet = {"postal_code":true,"country":true, "city":true, "startKey_id":true, "limit":true};
 
 function addHateoas(item){
 	item["links"] = [
@@ -73,26 +73,56 @@ router.get('/address', function(req, res) {
 });
 
 //add new address
+//'https://us-street.api.smartystreets.com/street-address?auth-id=0f03b7c1-40f1-bcba-807a-d23c144f7c08&auth-token=KZ21AhBQdmKPP8ouzKoH&street=1600+amphitheatre+pkwy&city=mountain+view&state=CA&candidates=10'
 router.post('/address', function(req, res) {
 	console.log(req.body);
-	let ddb = new AWS.DynamoDB.DocumentClient();
-	let add_id = req.body.address_id;
-	let params = {
-		TableName : 'AddressTable',
-		Item: req.body,
-		'ConditionExpression':'attribute_not_exists(address_id)',
-	};
-	ddb.put(params, function(err, data) {
-		if (err) {
-			res.status(400);
-			res.send("Address Existed");
-			console.log(err);
-			res.end();
-		}
-		else {
-			res.status(202);
-			res.end();
-		}
+	let street = (req.body.street_1+'+'+req.body.street_2).replace(/\s+/g, '+'); 
+	let zipcode = req.body.postal_code;
+	let city = req.body.city.replace(/\s+/g, '+');
+	let state = req.body.state.replace(/\s+/g, '+'); 
+	const https = require("https");
+	let url = "https://us-street.api.smartystreets.com/street-address?auth-id=0f03b7c1-40f1-bcba-807a-d23c144f7c08&auth-token=KZ21AhBQdmKPP8ouzKoH";
+	url+="&street="+street+'&city='+city+'&state='+state+'&zipcode='+zipcode;
+	console.log(url);
+	let valid = "";
+	https.get(url, response => {
+		response.setEncoding("utf8");
+		response.on("data", data => {
+			valid += data;
+		});
+		response.on("end", () => {
+			valid = JSON.parse(valid);
+			console.log(valid);
+			if(!isEmpty(valid)){
+				let ddb = new AWS.DynamoDB.DocumentClient();
+				req.body["address_id"] = valid[0]["delivery_point_barcode"];
+				let add_id = req.body.address_id;
+				if(req.body.street_2==="") req.body.street_2 = " ";
+				let params = {
+					TableName : 'AddressTable',
+					Item: req.body,
+					// 'ConditionExpression':'attribute_not_exists(address_id)',
+				};
+				ddb.put(params, function(err, data) {
+					if (err) {
+						res.status(400);
+						res.send(err);
+						console.log(err);
+						res.end();
+					}
+					else {
+						res.status(202);
+						res.send(baseURL+'/'+add_id);
+						res.end();
+					}
+				});		
+			}
+			else{
+				res.status(400);
+				res.send("Invalid Address");
+				res.end();
+			}				
+		});
 	});
 });
 
@@ -112,7 +142,7 @@ router.get('/address/:add_id/', function(req, res) {
 	    	res.end("400 Bad Request or the id should be a number");
 	    }
 	    else {
-	    	if(data.length!=0){
+	    	if(!isEmpty(data)){
 	    		addHateoas(data.Item);	    		
 	    	}
 	    	res.status(200).send(data);
@@ -121,7 +151,30 @@ router.get('/address/:add_id/', function(req, res) {
 	});
 });
 
+var hasOwnProperty = Object.prototype.hasOwnProperty;
 
+function isEmpty(obj) {
+    // null and undefined are "empty"
+    if (obj == null) return true;
+    // Assume if it has a length property with a non-zero value
+    // that that property is correct.
+    if (obj.length > 0)    return false;
+    if (obj.length === 0)  return true;
+
+    // If it isn't an object at this point
+    // it is empty, but it can't be anything *but* empty
+    // Is it empty?  Depends on your application.
+    if (typeof obj !== "object") return true;
+
+    // Otherwise, does it have any properties of its own?
+    // Note that this doesn't handle
+    // toString and valueOf enumeration bugs in IE < 9
+    for (var key in obj) {
+        if (hasOwnProperty.call(obj, key)) return false;
+    }
+
+    return true;
+}
 
 router.delete('/address/:add_id/', function(req, res) {
 	let ddb = new AWS.DynamoDB.DocumentClient();
@@ -163,7 +216,7 @@ router.get('/address/:add_id/person', function (req, res) {
             res.end("400 Bad Request or the address_id should be number");
         } 
         else {
-        	res.status(200).send(personURL+"?address_id="+data.Item.address_id);
+        	res.status(200).send(personURL+"?address_url="+baseURL+'/'+data.Item.address_id);
         	res.end();
         }
     });
