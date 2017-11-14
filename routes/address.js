@@ -106,20 +106,20 @@ router.post('/address', function(req, res) {
 				ddb.put(params, function(err, data) {
 					if (err) {
 						res.status(400);
-						res.send(err);
+						res.send(JSON.stringify({"error message": err}));
 						console.log(err);
 						res.end();
 					}
 					else {
 						res.status(202);
-						res.send(baseURL+'/'+add_id);
+						res.send(JSON.stringify({"url":baseURL+'/'+add_id}));
 						res.end();
 					}
 				});		
 			}
 			else{
 				res.status(400);
-				res.send("Invalid Address");
+				res.send(JSON.stringify({"error mesage":"Invalid Address"}));
 				res.end();
 			}				
 		});
@@ -137,9 +137,8 @@ router.get('/address/:add_id/', function(req, res) {
 	};
 	ddb.get(params, function(err, data) {
 	    if (err || isNaN(add_id)) {
-	    	console.log(err, err.stack); // an error occurred
 	    	res.status(400);
-	    	res.end("400 Bad Request or the id should be a number");
+	    	res.end(JSON.stringify({"error message":"400 Bad Request or the id should be a number"}));
 	    }
 	    else {
 	    	if(!isEmpty(data)){
@@ -190,7 +189,7 @@ router.delete('/address/:add_id/', function(req, res) {
 	    if (err || isNaN(add_id)) {
 	    	console.log(err);
 	    	res.status(400);
-	    	res.end("400 Bad Request or the add_id should be number");
+	    	res.end(JSON.stringify({"error mesage":"400 Bad Request or the add_id should be number"}));
 	    }
 	    else {
 	    	res.status(204);
@@ -213,10 +212,10 @@ router.get('/address/:add_id/person', function (req, res) {
         if (err) {
             console.error("Unable to read item. Error JSON:", JSON.stringify(err, null, 2));
             res.status(400);
-            res.end("400 Bad Request or the address_id should be number");
+            res.end(JSON.stringify({"error message":"400 Bad Request or the address_id should be number"}));
         } 
         else {
-        	res.status(200).send(personURL+"?address_url="+baseURL+'/'+data.Item.address_id);
+        	res.status(200).send(JSON.stringify({"url":personURL+"?address_url="+baseURL+'/'+data.Item.address_id}));
         	res.end();
         }
     });
