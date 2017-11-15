@@ -49,7 +49,8 @@ router.get('/address', function(req, res) {
         TableName: "AddressTable",
         Limit: 20
     };  	
-	processQuery(req.query, params);
+    let queryCopy = JSON.parse(JSON.stringify(req.query));
+    processQuery(queryCopy, params);   
  	
  
 
@@ -61,7 +62,14 @@ router.get('/address', function(req, res) {
 	    		addHateoas(data.Items[i]);	
 	    	}
 		    if(data.LastEvaluatedKey!==undefined){
-		    	q = req.originalUrl.split("?")[1]===undefined? "":req.originalUrl.split("?")[1]+"&";
+                let q = "";
+                delete req.query["startKey_id"]; 
+                for (var key in req.query) {
+                    if (req.query.hasOwnProperty(key)) {
+                    	console.log(key);
+                        q=q+key+"="+req.query[key]+"&";
+                    }
+                }
 		    	data["links"] = [
 					{"rel":"next", "href":baseURL+"?"+q+"startKey_id="+data.LastEvaluatedKey.address_id}
 		    	]
